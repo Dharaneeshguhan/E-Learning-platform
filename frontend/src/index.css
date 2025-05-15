@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gray-100 text-gray-800 dark:bg-dark-bg dark:text-light-text;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-block px-6 py-3 rounded-lg border-none cursor-pointer transition-colors duration-300 font-medium;
+  }
+
+  .btn-primary {
+    @apply bg-primary text-white hover:bg-primary-hover;
+  }
+
+  .btn-secondary {
+    @apply bg-secondary text-white hover:opacity-90;
+  }
+
+  .container {
+    @apply max-w-7xl mx-auto px-4;
+  }
+}
