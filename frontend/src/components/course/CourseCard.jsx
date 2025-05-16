@@ -1,26 +1,13 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FaStar, FaUsers, FaClock, FaShoppingCart } from 'react-icons/fa';
+import { FaStar, FaUsers, FaClock } from 'react-icons/fa';
 import { motion } from 'framer-motion';
+import { useAuth } from '../../context/AuthContext';
 
 const CourseCard = ({ course }) => {
   const navigate = useNavigate();
-
-  const handleAddToCart = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    // Add to local storage cart
-    const cart = JSON.parse(localStorage.getItem('cart') || '[]');
-    if (!cart.find(item => item.id === course.id)) {
-      cart.push(course);
-      localStorage.setItem('cart', JSON.stringify(cart));
-    }
-    
-    // Update cart count in header
-    const cartUpdateEvent = new CustomEvent('cartUpdate', { detail: cart.length });
-    window.dispatchEvent(cartUpdateEvent);
-  };
+  const { user } = useAuth();
+  const [error, setError] = React.useState('');
 
   return (
     <motion.div
@@ -77,21 +64,12 @@ const CourseCard = ({ course }) => {
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              navigate(`/app/course/${course.id}`);
+              navigate(`/app/course/${course._id || course.id}`);
             }}
             className="flex-1 px-4 py-2 bg-indigo-600 text-white text-center rounded-lg hover:bg-indigo-700 transition-colors"
           >
             Learn More
           </button>
-          {!course.purchased && (
-            <button
-              onClick={handleAddToCart}
-              className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
-              title="Add to Cart"
-            >
-              <FaShoppingCart />
-            </button>
-          )}
         </div>
       </div>
     </motion.div>

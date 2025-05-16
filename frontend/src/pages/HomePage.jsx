@@ -1,10 +1,14 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FaGraduationCap, FaUsers, FaStar, FaCode, FaRobot, FaShieldAlt, FaShoppingCart } from 'react-icons/fa';
+import { FaGraduationCap, FaUsers, FaStar, FaCode, FaRobot, FaShieldAlt } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 import CourseCard from '../components/course/CourseCard';
+import { useAuth } from '../context/AuthContext';
 
 const HomePage = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [error, setError] = React.useState('');
   const featuredCourses = [
     {
       id: 1,

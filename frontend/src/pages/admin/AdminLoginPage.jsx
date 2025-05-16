@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaLock, FaEye, FaEyeSlash, FaArrowLeft } from 'react-icons/fa';
 import { motion } from 'framer-motion';
+import { useAuth } from '../../context/AuthContext';
 
 const AdminLoginPage = () => {
   const navigate = useNavigate();
@@ -22,6 +23,8 @@ const AdminLoginPage = () => {
     }));
   };
 
+  const { login } = useAuth();
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -32,7 +35,7 @@ const AdminLoginPage = () => {
       return;
     }
 
-    // Security code validation (mock)
+    // Security code validation
     if (securityCode !== 'SECURE') {
       setError('Invalid security code');
       return;
@@ -40,17 +43,32 @@ const AdminLoginPage = () => {
 
     setLoading(true);
 
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Authentication logic
-    if (formData.email === 'admin@example.com' && formData.password === 'admin123') {
-      localStorage.setItem('adminToken', 'mock-admin-token');
-      navigate('/admin/dashboard');
-    } else {
-      setError('Invalid admin credentials');
+    try {
+      const response = await fetch('http://localhost:8081/api/v1/auth/admin/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.status === 'success' && data.token) {
+        localStorage.setItem('adminToken', data.token);
+        navigate('/admin/dashboard');
+      } else {
+        setError(data.message || 'Invalid admin credentials');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      setError('Failed to connect to server. Please check if the server is running.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (

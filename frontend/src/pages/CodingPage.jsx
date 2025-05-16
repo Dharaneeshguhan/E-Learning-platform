@@ -1,17 +1,36 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaCode, FaStar, FaUsers, FaFilter, FaArrowRight, FaShoppingCart } from 'react-icons/fa';
+import { FaCode, FaStar, FaUsers, FaFilter, FaArrowRight } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 
 const CodingPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
-  const API_URL = 'http://localhost:5000/api';
-  const codingCourses = [
+  const API_URL = 'http://localhost:8081/api';
+  const [codingCourses, setCodingCourses] = React.useState([]);
+
+  React.useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        const response = await fetch(`${API_URL}/courses?category=coding`);
+        const data = await response.json();
+        if (data.success) {
+          setCodingCourses(data.data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch courses:', err);
+        setError('Failed to load courses');
+      }
+    };
+
+    fetchCourses();
+  }, []);
+
+  // Fallback courses if API fails
+  const fallbackCourses = [
     {
       id: 1,
       title: 'Web Development Fundamentals',
@@ -74,6 +93,11 @@ const CodingPage = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+      {error && (
+        <div className="fixed top-4 right-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded z-50">
+          {error}
+        </div>
+      )}
       {/* Hero Section */}
       <section className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white py-16 px-4">
         <div className="max-w-7xl mx-auto">
@@ -172,7 +196,7 @@ const CodingPage = () => {
             </h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-              {codingCourses.map((course) => (
+              {(codingCourses.length > 0 ? codingCourses : fallbackCourses).map((course) => (
                 <motion.div
                   key={course.id}
                   whileHover={{ y: -10 }}
@@ -217,51 +241,14 @@ const CodingPage = () => {
                       </div>
                       <div className="text-right">
                         <p className="text-lg font-bold text-gray-900">${course.price}</p>
-                        <div className="flex items-center space-x-2">
+                        <div>
                           <button
                             onClick={() => navigate(`/course/${course.id}`)}
                             className="flex items-center text-blue-600 hover:text-blue-800 font-medium text-sm"
                           >
                             Learn More <FaArrowRight className="ml-1" />
                           </button>
-                          <button
-                            onClick={async () => {
-                              if (!user) {
-                                navigate('/login');
-                                return;
-                              }
-                              
-                              try {
-                                setLoading(true);
-                                const response = await fetch(`${API_URL}/cart/add`, {
-                                  method: 'POST',
-                                  headers: {
-                                    'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-                                  },
-                                  body: JSON.stringify({ courseId: course.id })
-                                });
-                                
-                                const data = await response.json();
-                                if (data.success) {
-                                  const cartUpdateEvent = new CustomEvent('cartUpdate');
-                                  window.dispatchEvent(cartUpdateEvent);
-                                  navigate('/cart');
-                                } else {
-                                  setError(data.message || 'Failed to add course to cart');
-                                }
-                              } catch (err) {
-                                setError('Failed to add course to cart');
-                              } finally {
-                                setLoading(false);
-                              }
-                            }}
-                            disabled={loading}
-                            className="p-2 text-blue-600 hover:text-blue-800 disabled:opacity-50"
-                            title="Add to cart"
-                          >
-                            <FaShoppingCart className="text-lg" />
-                          </button>
+
                         </div>
                       </div>
                     </div>

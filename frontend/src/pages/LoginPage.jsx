@@ -21,7 +21,7 @@ const LoginPage = () => {
       if (result.success) {
         navigate('/app');
       } else {
-        setError('Failed to sign in');
+        setError(result.error || 'Failed to sign in');
       }
     } catch (err) {
       setError('Failed to sign in');

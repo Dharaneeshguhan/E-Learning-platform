@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { FaStar, FaUsers, FaClock, FaBook, FaVideo, FaFileDownload, FaCertificate, FaInfinity, FaShoppingCart } from 'react-icons/fa';
+import { FaStar, FaUsers, FaClock, FaBook, FaVideo, FaFileDownload, FaCertificate, FaInfinity } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 
 const CourseDetail = ({ course }) => {
@@ -10,41 +10,7 @@ const CourseDetail = ({ course }) => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const API_URL = 'http://localhost:5000/api';
-
-  const handleAddToCart = async () => {
-    if (!user) {
-      navigate('/login');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const response = await fetch(`${API_URL}/cart/add`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-        },
-        body: JSON.stringify({ courseId: course.id })
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        // Trigger cart update
-        const cartUpdateEvent = new CustomEvent('cartUpdate');
-        window.dispatchEvent(cartUpdateEvent);
-        navigate('/cart');
-      } else {
-        setError(data.message || 'Failed to add course to cart');
-      }
-    } catch (err) {
-      setError('Failed to add course to cart');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const API_URL = 'http://localhost:8081/api';
 
   const handleEnroll = () => {
     navigate('/payment', {
@@ -167,15 +133,6 @@ const CourseDetail = ({ course }) => {
                   disabled={loading}
                 >
                   Enroll Now
-                </button>
-
-                <button
-                  onClick={handleAddToCart}
-                  className="w-full py-3 px-4 bg-white text-indigo-600 border border-indigo-600 rounded-lg hover:bg-indigo-50 transition-colors mb-4 flex items-center justify-center"
-                  disabled={loading}
-                >
-                  <FaShoppingCart className="mr-2" />
-                  {loading ? 'Adding...' : 'Add to Cart'}
                 </button>
 
                 <div className="space-y-4">

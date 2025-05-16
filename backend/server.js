@@ -2,312 +2,250 @@ import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import bcrypt from 'bcryptjs';
+import morgan from 'morgan';
+import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
+import mongoSanitize from 'express-mongo-sanitize';
+import xss from 'xss-clean';
+import compression from 'compression';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 
-// Load environment variables
-dotenv.config();
+// Load env variables
+dotenv.config({ path: '.env' });
 
+// Import routes
+import authRoutes from './routes/authRoutes.js';
+import courseRoutes from './routes/courseRoutes.js';
+import { protect as auth } from './middleware/authMiddleware.js';
+
+// Initialize express app
 const app = express();
-app.use(cors());
-app.use(express.json());
 
-// MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('MongoDB Connected'))
-  .catch(err => {
-    console.error('MongoDB Connection Failed:', err.message);
-    process.exit(1);
+// Security headers
+app.use(helmet());
+
+// Body parser
+app.use(express.json({ limit: '10kb' }));
+app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+
+// Enable CORS with specific options
+app.use(cors({
+  origin: ['http://localhost:3000', 'http://localhost:5173'], // Allow both Vite and CRA default ports
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+// Data sanitization
+app.use(mongoSanitize());
+app.use(xss());
+
+// Compression
+app.use(compression());
+
+// Logging in development
+if (process.env.NODE_ENV === 'development') {
+  app.use(morgan('dev'));
+}
+
+// Rate limiting
+const limiter = rateLimit({
+  max: 100,
+  windowMs: 60 * 60 * 1000,
+  message: 'Too many requests from this IP, please try again in an hour!'
+});
+app.use('/api', limiter);
+
+// Mount routes
+app.use('/api/v1/auth', authRoutes); // Auth routes should be before protected routes
+app.use('/api/v1/courses', courseRoutes); // Course routes (public and protected handled internally)
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({
+    status: 'error',
+    message: err.message || 'Something went wrong!'
   });
-
-// Models
-const userSchema = new mongoose.Schema({
-  email: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
-  name: { type: String, required: true },
-  role: { type: String, default: 'student' },
-  purchasedCourses: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Course' }],
-  createdAt: { type: Date, default: Date.now }
 });
 
-const courseSchema = new mongoose.Schema({
-  title: { type: String, required: true },
-  description: { type: String, required: true },
-  price: { type: Number, required: true },
-  imageUrl: { type: String, required: true },
-  instructor: { type: String, required: true },
-  category: { type: String, required: true },
-  rating: { type: Number, default: 0 },
-  studentsEnrolled: { type: Number, default: 0 },
-  level: { type: String, required: true },
-  duration: { type: Number, required: true },
-  modules: [{
-    title: { type: String, required: true },
-    description: { type: String },
-    duration: { type: Number },
-    content: { type: String }
-  }],
-  learningOutcomes: [{ type: String }],
-  requirements: [{ type: String }],
-  createdAt: { type: Date, default: Date.now }
-});
-
-const User = mongoose.model('User', userSchema);
-const Course = mongoose.model('Course', courseSchema);
-
-// Cart Schema
-const cartSchema = new mongoose.Schema({
-  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  items: [{
-    course: { type: mongoose.Schema.Types.ObjectId, ref: 'Course', required: true },
-    addedAt: { type: Date, default: Date.now }
-  }],
-  updatedAt: { type: Date, default: Date.now }
-});
-
-const Cart = mongoose.model('Cart', cartSchema);
-
-// Auth Middleware
-const auth = async (req, res, next) => {
+// Connect to MongoDB
+const connectDB = async () => {
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-    if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.userId);
-    if (!user) return res.status(401).json({ success: false, message: 'User not found' });
-
-    req.user = user;
-    next();
-  } catch {
-    res.status(401).json({ success: false, message: 'Please authenticate' });
+    const conn = await mongoose.connect(process.env.MONGODB_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+      serverSelectionTimeoutMS: 30000,
+      socketTimeoutMS: 45000,
+      connectTimeoutMS: 30000
+    });
+    console.log('MongoDB Connected Successfully!');
+    return conn;
+  } catch (err) {
+    console.error('MongoDB Connection Error:', err.message);
+    if (err.message.includes('ENOTFOUND') || err.message.includes('ETIMEDOUT')) {
+      console.error('Network error: Please check your internet connection');
+    } else if (err.message.includes('Authentication failed')) {
+      console.error('Authentication error: Please check your MongoDB credentials');
+    } else if (err.message.includes('whitelist')) {
+      console.error('IP Whitelist error: Please add your current IP to MongoDB Atlas whitelist');
+      console.error('Visit: https://cloud.mongodb.com/v2/your-project/security/network/accessList');
+    }
+    return null;
   }
 };
 
-// Routes
-
-// Register
-app.post('/api/auth/register', async (req, res) => {
-  try {
-    const { email, password, name } = req.body;
-    const existingUser = await User.findOne({ email });
-    if (existingUser) return res.status(400).json({ success: false, message: 'Email already registered' });
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const user = new User({ email, password: hashedPassword, name });
-    await user.save();
-
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET);
-    res.status(201).json({
-      success: true,
-      data: {
-        token,
-        user: { id: user._id, name: user.name, email: user.email, role: user.role }
-      }
-    });
-  } catch (error) {
-    res.status(400).json({ success: false, message: error.message || 'Failed to create account' });
-  }
-});
-
-// Login
-app.post('/api/auth/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    const user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ success: false, message: 'Invalid email or password' });
-
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ success: false, message: 'Invalid email or password' });
-
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET);
-    res.json({
-      success: true,
-      data: {
-        token,
-        user: { id: user._id, name: user.name, email: user.email, role: user.role }
-      }
-    });
-  } catch (error) {
-    res.status(400).json({ success: false, message: error.message || 'Login failed' });
-  }
-});
-
-// Get Authenticated User
-app.get('/api/auth/me', auth, (req, res) => {
-  res.json({
-    success: true,
-    data: {
-      id: req.user._id,
-      name: req.user.name,
-      email: req.user.email,
-      role: req.user.role
+// Initialize database connection with retry
+const initDB = async () => {
+  let retries = 3;
+  while (retries > 0) {
+    const conn = await connectDB();
+    if (conn) {
+      return conn;
     }
+    retries--;
+    if (retries === 0) {
+      console.error('Failed to connect to MongoDB after 3 attempts');
+      process.exit(1);
+    }
+    console.log(`Retrying connection... (${retries} attempts remaining)`);
+    await new Promise(resolve => setTimeout(resolve, 5000));
+  }
+};
+
+// Start server only after DB connection
+const startServer = async () => {
+  try {
+    await initDB();
+    let port = process.env.PORT || 5000;
+    let maxRetries = 10;
+    let currentRetry = 0;
+
+    const tryPort = async (p) => {
+      try {
+        const server = await new Promise((resolve, reject) => {
+          const s = app.listen(p, () => resolve(s))
+            .on('error', (err) => {
+              if (err.code === 'EADDRINUSE') {
+                reject(new Error(`Port ${p} is in use`));
+              } else {
+                reject(err);
+              }
+            });
+        });
+        console.log(`Server running on port ${p}...`);
+        return true;
+      } catch (err) {
+        if (err.message.includes('Port') && currentRetry < maxRetries) {
+          console.log(`Port ${p} is in use, trying next port...`);
+          return false;
+        }
+        throw err;
+      }
+    };
+
+    while (currentRetry < maxRetries) {
+      if (await tryPort(port)) {
+        break;
+      }
+      port++;
+      currentRetry++;
+    }
+
+    if (currentRetry >= maxRetries) {
+      throw new Error('Could not find an available port after multiple retries');
+    }
+  } catch (err) {
+    console.error('Failed to start server:', err);
+    process.exit(1);
+  }
+};
+
+// Mongoose error handlers
+mongoose.connection.on('error', (err) => {
+  console.error('MongoDB connection error:', err);
+});
+
+startServer();
+
+mongoose.connection.on('disconnected', () => {
+  console.log('MongoDB disconnected');
+});
+
+process.on('SIGINT', async () => {
+  await mongoose.connection.close();
+  process.exit(0);
+});
+
+initDB();
+
+
+// Handle undefined routes
+app.all('*', (req, res) => {
+  res.status(404).json({
+    status: 'error',
+    message: `Can't find ${req.originalUrl} on this server!`
   });
 });
 
-// Get All Courses
-app.get('/api/courses', async (req, res) => {
-  try {
-    const { category, search, sort } = req.query;
-    const query = {};
-    if (category) query.category = category;
-    if (search) query.title = new RegExp(search, 'i');
+// Global error handler
+app.use((err, req, res, next) => {
+  err.statusCode = err.statusCode || 500;
+  err.status = err.status || 'error';
 
-    const sortOption = {};
-    if (sort === 'rating') sortOption.rating = -1;
-    else if (sort === 'popular') sortOption.studentsEnrolled = -1;
-    else if (sort === 'price') sortOption.price = 1;
-
-    const courses = await Course.find(query).sort(sortOption);
-    res.json({ success: true, data: courses });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+  // Only show error details in development
+  if (process.env.NODE_ENV === 'development') {
+    res.status(err.statusCode).json({
+      status: err.status,
+      message: err.message,
+      error: err,
+      stack: err.stack
+    });
+  } else {
+    // Production: don't leak error details
+    res.status(err.statusCode).json({
+      status: err.status,
+      message: err.isOperational ? err.message : 'Something went wrong!'
+    });
   }
 });
 
-// Get Single Course
-app.get('/api/courses/:id', async (req, res) => {
-  try {
-    const course = await Course.findById(req.params.id);
-    if (!course) return res.status(404).json({ success: false, message: 'Course not found' });
-
-    res.json({ success: true, data: course });
-  } catch (error) {
-    res.status(404).json({ success: false, message: error.message });
-  }
+// Connect to MongoDB
+mongoose.connect(process.env.MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+}).then(() => {
+  console.log('MongoDB Connected Successfully!');
+}).catch(err => {
+  console.log('MongoDB Connection Error:', err.message);
 });
 
-// Enroll in Course
-// Cart Routes
-
-// Get user's cart
-app.get('/api/cart', auth, async (req, res) => {
-  try {
-    let cart = await Cart.findOne({ user: req.user._id }).populate('items.course');
-    if (!cart) {
-      cart = new Cart({ user: req.user._id, items: [] });
-      await cart.save();
-    }
-    res.json({ success: true, data: cart });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
+// Start server
+const port = process.env.PORT || 5000;
+const server = app.listen(port, () => {
+  console.log(`Server running on port ${port}...`);
 });
 
-// Add item to cart
-app.post('/api/cart/add', auth, async (req, res) => {
-  try {
-    const { courseId } = req.body;
-    if (!courseId) {
-      return res.status(400).json({ success: false, message: 'Course ID is required' });
-    }
-
-    // Check if course exists
-    const course = await Course.findById(courseId);
-    if (!course) {
-      return res.status(404).json({ success: false, message: 'Course not found' });
-    }
-
-    // Get or create cart
-    let cart = await Cart.findOne({ user: req.user._id });
-    if (!cart) {
-      cart = new Cart({ user: req.user._id, items: [] });
-    }
-
-    // Check if course is already in cart
-    const isInCart = cart.items.some(item => item.course.toString() === courseId);
-    if (isInCart) {
-      return res.status(400).json({ success: false, message: 'Course already in cart' });
-    }
-
-    // Add course to cart
-    cart.items.push({ course: courseId });
-    cart.updatedAt = new Date();
-    await cart.save();
-
-    // Return populated cart
-    cart = await Cart.findById(cart._id).populate('items.course');
-    res.json({ success: true, data: cart });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received. Shutting down gracefully...');
+  server.close(() => {
+    console.log('Process terminated!');
+    process.exit(0);
+  });
 });
 
-// Remove item from cart
-app.delete('/api/cart/remove/:courseId', auth, async (req, res) => {
-  try {
-    const { courseId } = req.params;
-    let cart = await Cart.findOne({ user: req.user._id });
-    
-    if (!cart) {
-      return res.status(404).json({ success: false, message: 'Cart not found' });
-    }
-
-    cart.items = cart.items.filter(item => item.course.toString() !== courseId);
-    cart.updatedAt = new Date();
-    await cart.save();
-
-    // Return populated cart
-    cart = await Cart.findById(cart._id).populate('items.course');
-    res.json({ success: true, data: cart });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
+process.on('unhandledRejection', err => {
+  console.log('UNHANDLED REJECTION! 💥 Shutting down...');
+  console.log(err.name, err.message);
+  server.close(() => {
+    process.exit(1);
+  });
 });
 
-// Clear cart
-app.delete('/api/cart/clear', auth, async (req, res) => {
-  try {
-    let cart = await Cart.findOne({ user: req.user._id });
-    if (!cart) {
-      return res.status(404).json({ success: false, message: 'Cart not found' });
-    }
-
-    cart.items = [];
-    cart.updatedAt = new Date();
-    await cart.save();
-
-    res.json({ success: true, data: cart });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-app.post('/api/courses/enroll', auth, async (req, res) => {
-  try {
-    const { courseId } = req.body;
-    const user = req.user;
-
-    if (user.purchasedCourses.includes(courseId)) {
-      return res.status(400).json({ success: false, message: 'Already enrolled in this course' });
-    }
-
-    user.purchasedCourses.push(courseId);
-    await user.save();
-
-    const course = await Course.findById(courseId);
-    course.studentsEnrolled += 1;
-    await course.save();
-
-    res.json({ success: true, message: 'Successfully enrolled' });
-  } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
-  }
-});
-
-// Get User's Enrolled Courses
-app.get('/api/user/courses', auth, async (req, res) => {
-  try {
-    const user = await User.findById(req.user._id).populate('purchasedCourses');
-    res.json({ success: true, data: user.purchasedCourses });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-// Start Server
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+process.on('uncaughtException', err => {
+  console.log('UNCAUGHT EXCEPTION! 💥 Shutting down...');
+  console.log(err.name, err.message);
+  process.exit(1);
 });

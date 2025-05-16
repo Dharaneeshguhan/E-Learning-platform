@@ -2,49 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { FaUser, FaMoon, FaSun, FaBars, FaSearch, FaShoppingCart, FaBell } from 'react-icons/fa';
+import { FaUser, FaMoon, FaSun, FaBars, FaSearch, FaBell } from 'react-icons/fa';
 
 const Header = ({ toggleSidebar }) => {
   const { user, logout } = useAuth();
   const { darkMode, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [showDropdown, setShowDropdown] = useState(false);
-  const [cartCount, setCartCount] = useState(0);
-
-  const API_URL = 'http://localhost:5000/api';
-
-  // Initialize cart count and listen for updates
-  useEffect(() => {
-    const fetchCartCount = async () => {
-      if (!user) {
-        setCartCount(0);
-        return;
-      }
-
-      try {
-        const response = await fetch(`${API_URL}/cart`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-          }
-        });
-        const data = await response.json();
-        if (data.success) {
-          setCartCount(data.data.items?.length || 0);
-        }
-      } catch (err) {
-        console.error('Failed to fetch cart count:', err);
-      }
-    };
-
-    fetchCartCount();
-
-    // Listen for cart updates
-    window.addEventListener('cartUpdate', fetchCartCount);
-
-    return () => {
-      window.removeEventListener('cartUpdate', fetchCartCount);
-    };
-  }, [user]);
 
   const handleLogout = async () => {
     await logout();
@@ -92,22 +56,6 @@ const Header = ({ toggleSidebar }) => {
               {darkMode ? <FaSun className="h-5 w-5" /> : <FaMoon className="h-5 w-5" />}
             </button>
 
-            <button 
-              className="relative p-2"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                navigate('/app/cart');
-              }}
-            >
-              <FaShoppingCart className="h-5 w-5 text-gray-600 dark:text-gray-300" />
-              {cartCount > 0 && (
-                <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-600 rounded-full">
-                  {cartCount}
-                </span>
-              )}
-            </button>
-
             <button className="relative p-2">
               <FaBell className="h-5 w-5 text-gray-600 dark:text-gray-300" />
               <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-600 rounded-full">
@@ -133,14 +81,14 @@ const Header = ({ toggleSidebar }) => {
                 <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5">
                   <div className="py-1" role="menu">
                     <Link
-                      to="/profile"
+                      to="/app/profile"
                       className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
                       role="menuitem"
                     >
                       Your Profile
                     </Link>
                     <Link
-                      to="/settings"
+                      to="/app/settings"
                       className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
                       role="menuitem"
                     >

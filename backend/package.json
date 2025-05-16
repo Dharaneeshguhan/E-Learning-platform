@@ -1,23 +1,30 @@
 {
   "name": "backend",
   "version": "1.0.0",
+  "description": "Backend for the E-Learning Platform",
   "main": "server.js",
   "type": "module",
   "scripts": {
     "start": "node --no-warnings server.js",
-    "dev": "nodemon --no-warnings server.js"
+    "dev": "nodemon server.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "Backend server for LearnJoy e-learning platform",
   "dependencies": {
     "bcryptjs": "^2.4.3",
+    "compression": "^1.8.0",
     "cors": "^2.8.5",
     "dotenv": "^16.0.3",
-    "express": "^4.18.2",
-    "jsonwebtoken": "^9.0.0",
-    "mongoose": "^7.0.3"
+    "express": "^4.21.2",
+    "express-mongo-sanitize": "^2.2.0",
+    "express-rate-limit": "^7.5.0",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^7.8.7",
+    "morgan": "^1.10.0",
+    "nodemailer": "^6.9.1",
+    "xss-clean": "^0.1.4"
   },
   "devDependencies": {
     "nodemon": "^2.0.22"

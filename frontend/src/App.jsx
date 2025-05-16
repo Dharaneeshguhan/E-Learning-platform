@@ -3,7 +3,9 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import Layout from './components/layout/Layout';
+import AdminLayout from './components/layout/AdminLayout';
 import ProtectedRoute from './components/ProtectedRoute';
+import AdminProtectedRoute from './components/AdminProtectedRoute';
 
 // Pages
 import LandingPage from './pages/LandingPage';
@@ -24,7 +26,7 @@ import CodingPage from './pages/CodingPage';
 import SecurityPage from './pages/SecurityPage';
 import AIPage from './pages/AIPage';
 import ProfilePage from './pages/ProfilePage';
-import CartPage from './pages/CartPage';
+import SettingsPage from './pages/SettingsPage';
 
 import './App.css';
 
@@ -32,12 +34,12 @@ function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <Router>
+          <Router>
           <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/admin-login" element={<AdminLoginPage />} />
-            <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>}>
-              <Route index element={<AdminDashboard />} />
+            <Route path="/admin" element={<AdminProtectedRoute><AdminLayout /></AdminProtectedRoute>}>
+              <Route path="dashboard" element={<AdminDashboard />} />
               <Route path="users" element={<AdminUsers />} />
               <Route path="courses" element={<AdminCourses />} />
               <Route path="settings" element={<AdminSettings />} />
@@ -55,11 +57,11 @@ function App() {
               <Route path="security" element={<SecurityPage />} />
               <Route path="ai" element={<AIPage />} />
               <Route path="profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-              <Route path="cart" element={<CartPage />} />
+              <Route path="settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
-        </Router>
+          </Router>
       </AuthProvider>
     </ThemeProvider>
   );
